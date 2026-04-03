@@ -44,6 +44,8 @@ python3 -m pip install '.[plot]'
 
 결과는 `outputs/vehicle_lane_change.csv`에 저장된다.
 
+![Vehicle lane change plot](outputs/vehicle_lane_change.png)
+
 ### 2. Manipulator Dynamics
 
 2-link planar manipulator의 rigid-body dynamics를 사용했다.
@@ -55,6 +57,8 @@ python3 -m pip install '.[plot]'
 
 결과는 `outputs/manipulator_tracking.csv`에 저장된다.
 
+![Manipulator tracking plot](outputs/manipulator_tracking.png)
+
 ### 3. Humanoid Dynamics
 
 휴머노이드는 full-body multibody 대신 LIPM-inspired CoM model로 단순화했다.
@@ -65,6 +69,8 @@ python3 -m pip install '.[plot]'
 - 제어기: CoM reference를 추종하는 ZMP controller
 
 결과는 `outputs/humanoid_walk.csv`에 저장된다.
+
+![Humanoid walking plot](outputs/humanoid_walk.png)
 
 ## 프로젝트 구조
 
