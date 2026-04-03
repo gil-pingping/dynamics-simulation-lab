@@ -44,7 +44,7 @@ python3 -m pip install '.[plot]'
 
 결과는 `outputs/vehicle_lane_change.csv`에 저장된다.
 
-![Vehicle lane change plot](outputs/vehicle_lane_change.png)
+![Vehicle lane change plot](https://raw.githubusercontent.com/gil-pingping/dynamics-simulation-lab/main/outputs/vehicle_lane_change.png)
 
 ### 2. Manipulator Dynamics
 
@@ -57,7 +57,7 @@ python3 -m pip install '.[plot]'
 
 결과는 `outputs/manipulator_tracking.csv`에 저장된다.
 
-![Manipulator tracking plot](outputs/manipulator_tracking.png)
+![Manipulator tracking plot](https://raw.githubusercontent.com/gil-pingping/dynamics-simulation-lab/main/outputs/manipulator_tracking.png)
 
 ### 3. Humanoid Dynamics
 
@@ -70,7 +70,7 @@ python3 -m pip install '.[plot]'
 
 결과는 `outputs/humanoid_walk.csv`에 저장된다.
 
-![Humanoid walking plot](outputs/humanoid_walk.png)
+![Humanoid walking plot](https://raw.githubusercontent.com/gil-pingping/dynamics-simulation-lab/main/outputs/humanoid_walk.png)
 
 ## 프로젝트 구조
 
