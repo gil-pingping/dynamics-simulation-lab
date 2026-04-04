@@ -9,7 +9,13 @@ SRC = ROOT / "src"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
-from dynamicslab import simulate_humanoid_walk, simulate_manipulator_tracking, simulate_vehicle_lane_change
+from dynamicslab import (
+    simulate_drone_mission,
+    simulate_humanoid_walk,
+    simulate_manipulator_tracking,
+    simulate_satellite_orbit_raise,
+    simulate_vehicle_lane_change,
+)
 
 
 class VehicleDynamicsTests(unittest.TestCase):
@@ -33,6 +39,27 @@ class HumanoidDynamicsTests(unittest.TestCase):
         final = samples[-1]
         self.assertGreater(final.com_x, 1.0)
         self.assertLess(max(abs(row.com_y) for row in samples), 0.25)
+
+
+class DroneDynamicsTests(unittest.TestCase):
+    def test_drone_reaches_reference_zone(self) -> None:
+        samples = simulate_drone_mission()
+        final = samples[-1]
+        self.assertGreater(final.x, 5.7)
+        self.assertAlmostEqual(final.z, 1.2, delta=0.12)
+        self.assertLess(max(abs(row.theta) for row in samples), 0.6)
+
+
+class SatelliteDynamicsTests(unittest.TestCase):
+    def test_orbit_raise_increases_peak_altitude(self) -> None:
+        samples = simulate_satellite_orbit_raise()
+        initial_altitude = samples[0].altitude
+        peak_altitude = max(row.altitude for row in samples)
+        final_specific_energy = samples[-1].specific_energy
+        initial_specific_energy = samples[0].specific_energy
+
+        self.assertGreater(peak_altitude, initial_altitude + 200_000.0)
+        self.assertGreater(final_specific_energy, initial_specific_energy)
 
 
 if __name__ == "__main__":

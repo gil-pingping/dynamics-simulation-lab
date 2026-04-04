@@ -12,6 +12,8 @@ def main() -> None:
         ROOT / "examples" / "vehicle_lane_change_demo.py",
         ROOT / "examples" / "manipulator_tracking_demo.py",
         ROOT / "examples" / "humanoid_walk_demo.py",
+        ROOT / "examples" / "drone_mission_demo.py",
+        ROOT / "examples" / "satellite_orbit_demo.py",
     ]
 
     for script in scripts:
