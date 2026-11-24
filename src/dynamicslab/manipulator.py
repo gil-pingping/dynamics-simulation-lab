@@ -8,20 +8,22 @@ from .utils import rk4_step
 
 @dataclass(slots=True)
 class ManipulatorParameters:
-    link1_length: float = 1.0
-    link2_length: float = 0.8
-    link1_com: float = 0.5
-    link2_com: float = 0.4
-    link1_mass: float = 2.2
-    link2_mass: float = 1.5
-    link1_inertia: float = 0.15
-    link2_inertia: float = 0.08
-    damping: float = 0.15
-    gravity: float = 9.81
-    kp1: float = 55.0
-    kp2: float = 40.0
-    kd1: float = 16.0
-    kd2: float = 11.0
+    # 6-DOF Robot parameters (e.g., loosely based on a UR or industrial robot)
+    # Link lengths (meters)
+    l1: float = 0.4   # Base height
+    l2: float = 0.6   # Upper arm
+    l3: float = 0.5   # Forearm
+    l4: float = 0.15  # Wrist 1
+    l5: float = 0.15  # Wrist 2
+    l6: float = 0.1   # Wrist 3 to end-effector
+    
+    # Decoupled dynamics parameters per joint (Inertia, Damping)
+    inertias: tuple[float, float, float, float, float, float] = (0.5, 1.0, 0.8, 0.2, 0.2, 0.1)
+    dampings: tuple[float, float, float, float, float, float] = (0.5, 1.0, 0.8, 0.2, 0.2, 0.1)
+    
+    # PD Controller gains per joint
+    kp: tuple[float, float, float, float, float, float] = (100.0, 150.0, 120.0, 50.0, 50.0, 30.0)
+    kd: tuple[float, float, float, float, float, float] = (20.0, 30.0, 24.0, 10.0, 10.0, 6.0)
 
 
 @dataclass(slots=True)
@@ -29,47 +31,55 @@ class ManipulatorSample:
     time: float
     q1: float
     q2: float
+    q3: float
+    q4: float
+    q5: float
+    q6: float
     dq1: float
     dq2: float
-    ref_q1: float
-    ref_q2: float
+    dq3: float
+    dq4: float
+    dq5: float
+    dq6: float
     tau1: float
     tau2: float
-    end_effector_x: float
-    end_effector_y: float
+    tau3: float
+    tau4: float
+    tau5: float
+    tau6: float
+    ee_x: float
+    ee_y: float
+    ee_z: float
 
 
 def simulate_manipulator_tracking(
     *,
-    duration: float = 6.0,
+    duration: float = 8.0,
     dt: float = 0.01,
     params: ManipulatorParameters | None = None,
 ) -> list[ManipulatorSample]:
     params = params or ManipulatorParameters()
-    state = [0.0, 0.0, 0.0, 0.0]
+    # State: [q1..q6, dq1..dq6]
+    state = [0.0] * 12
     samples: list[ManipulatorSample] = []
     time = 0.0
     steps = int(duration / dt)
 
     for _ in range(steps + 1):
-        ref_q1, ref_q2, _, _ = reference_trajectory(time)
-        tau1, tau2 = control_torque(time, state, params)
-        end_effector_x, end_effector_y = end_effector_position(state[0], state[1], params)
+        ref_q, ref_dq = reference_trajectory(time)
+        tau = control_torque(time, state, params)
+        ee_x, ee_y, ee_z = end_effector_position(state[:6], params)
+        
         samples.append(
             ManipulatorSample(
                 time=time,
-                q1=state[0],
-                q2=state[1],
-                dq1=state[2],
-                dq2=state[3],
-                ref_q1=ref_q1,
-                ref_q2=ref_q2,
-                tau1=tau1,
-                tau2=tau2,
-                end_effector_x=end_effector_x,
-                end_effector_y=end_effector_y,
+                q1=state[0], q2=state[1], q3=state[2], q4=state[3], q5=state[4], q6=state[5],
+                dq1=state[6], dq2=state[7], dq3=state[8], dq4=state[9], dq5=state[10], dq6=state[11],
+                tau1=tau[0], tau2=tau[1], tau3=tau[2], tau4=tau[3], tau5=tau[4], tau6=tau[5],
+                ee_x=ee_x, ee_y=ee_y, ee_z=ee_z,
             )
         )
+        
         state = rk4_step(
             lambda current_time, current_state: _manipulator_derivative(current_time, current_state, params),
             time,
@@ -81,90 +91,96 @@ def simulate_manipulator_tracking(
     return samples
 
 
-def reference_trajectory(time: float) -> tuple[float, float, float, float]:
-    start_q1, start_q2 = 0.0, 0.0
-    goal_q1, goal_q2 = 0.85, -0.65
+def reference_trajectory(time: float) -> tuple[list[float], list[float]]:
+    # 6-DOF target poses
+    start_q = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+    # Pick and place motion
+    goal_q = [math.pi/2, -math.pi/4, math.pi/2, -math.pi/4, -math.pi/2, math.pi]
 
-    if time <= 0.4:
+    if time <= 0.5:
         s = 0.0
         ds = 0.0
-    elif time >= 2.8:
+    elif time >= 4.5:
         s = 1.0
         ds = 0.0
     else:
-        duration = 2.4
-        tau = (time - 0.4) / duration
+        duration = 4.0
+        tau = (time - 0.5) / duration
+        # Smooth step (minimum jerk)
         s = tau * tau * (3.0 - 2.0 * tau)
         ds = (6.0 * tau * (1.0 - tau)) / duration
 
-    ref_q1 = start_q1 + s * (goal_q1 - start_q1)
-    ref_q2 = start_q2 + s * (goal_q2 - start_q2)
-    ref_dq1 = ds * (goal_q1 - start_q1)
-    ref_dq2 = ds * (goal_q2 - start_q2)
-    return ref_q1, ref_q2, ref_dq1, ref_dq2
+    ref_q = [start_q[i] + s * (goal_q[i] - start_q[i]) for i in range(6)]
+    ref_dq = [ds * (goal_q[i] - start_q[i]) for i in range(6)]
+    
+    return ref_q, ref_dq
 
 
-def control_torque(time: float, state: list[float], params: ManipulatorParameters) -> tuple[float, float]:
-    q1, q2, dq1, dq2 = state
-    ref_q1, ref_q2, ref_dq1, ref_dq2 = reference_trajectory(time)
-    gravity_1, gravity_2 = gravity_vector(q1, q2, params)
-    tau1 = params.kp1 * (ref_q1 - q1) + params.kd1 * (ref_dq1 - dq1) + gravity_1
-    tau2 = params.kp2 * (ref_q2 - q2) + params.kd2 * (ref_dq2 - dq2) + gravity_2
-    return tau1, tau2
+def control_torque(time: float, state: list[float], params: ManipulatorParameters) -> list[float]:
+    q = state[:6]
+    dq = state[6:]
+    ref_q, ref_dq = reference_trajectory(time)
+    
+    tau = []
+    for i in range(6):
+        t = params.kp[i] * (ref_q[i] - q[i]) + params.kd[i] * (ref_dq[i] - dq[i])
+        tau.append(t)
+    return tau
 
 
-def end_effector_position(q1: float, q2: float, params: ManipulatorParameters) -> tuple[float, float]:
-    x = params.link1_length * math.cos(q1) + params.link2_length * math.cos(q1 + q2)
-    y = params.link1_length * math.sin(q1) + params.link2_length * math.sin(q1 + q2)
-    return x, y
+def end_effector_position(q: list[float], params: ManipulatorParameters) -> tuple[float, float, float]:
+    # Simplified Forward Kinematics (similar to UR structure)
+    # q[0]: Base (Z-axis rotation)
+    # q[1]: Shoulder (Y-axis rotation)
+    # q[2]: Elbow (Y-axis rotation)
+    # q[3]: Wrist 1 (Y-axis rotation)
+    # q[4]: Wrist 2 (Z-axis rotation)
+    # q[5]: Wrist 3 (Y-axis rotation)
+    
+    # Transformation matrices approach
+    def rot_z(angle):
+        c, s = math.cos(angle), math.sin(angle)
+        return [[c, -s, 0, 0], [s, c, 0, 0], [0, 0, 1, 0], [0, 0, 0, 1]]
+        
+    def rot_y(angle):
+        c, s = math.cos(angle), math.sin(angle)
+        return [[c, 0, s, 0], [0, 1, 0, 0], [-s, 0, c, 0], [0, 0, 0, 1]]
+        
+    def trans(dx, dy, dz):
+        return [[1, 0, 0, dx], [0, 1, 0, dy], [0, 0, 1, dz], [0, 0, 0, 1]]
+        
+    def multiply(A, B):
+        return [[sum(A[i][k] * B[k][j] for k in range(4)) for j in range(4)] for i in range(4)]
+
+    # T01: Base
+    T01 = multiply(rot_z(q[0]), trans(0, 0, params.l1))
+    # T12: Shoulder
+    T12 = multiply(rot_y(q[1]), trans(0, 0, params.l2))
+    # T23: Elbow
+    T23 = multiply(rot_y(q[2]), trans(0, 0, params.l3))
+    # T34: Wrist 1
+    T34 = multiply(rot_y(q[3]), trans(0, params.l4, 0))
+    # T45: Wrist 2
+    T45 = multiply(rot_z(q[4]), trans(0, 0, params.l5))
+    # T56: Wrist 3 to EE
+    T56 = multiply(rot_y(q[5]), trans(0, 0, params.l6))
+
+    T = T01
+    for m in [T12, T23, T34, T45, T56]:
+        T = multiply(T, m)
+        
+    return T[0][3], T[1][3], T[2][3]
 
 
 def _manipulator_derivative(time: float, state: list[float], params: ManipulatorParameters) -> list[float]:
-    q1, q2, dq1, dq2 = state
-    tau1, tau2 = control_torque(time, state, params)
-    m11, m12, m22 = mass_matrix_terms(q2, params)
-    coriolis_1, coriolis_2 = coriolis_vector(q2, dq1, dq2, params)
-    gravity_1, gravity_2 = gravity_vector(q1, q2, params)
+    q = state[:6]
+    dq = state[6:]
+    tau = control_torque(time, state, params)
+    
+    # Decoupled dynamics: I * ddq + b * dq = tau
+    ddq = []
+    for i in range(6):
+        accel = (tau[i] - params.dampings[i] * dq[i]) / params.inertias[i]
+        ddq.append(accel)
 
-    rhs1 = tau1 - coriolis_1 - gravity_1 - params.damping * dq1
-    rhs2 = tau2 - coriolis_2 - gravity_2 - params.damping * dq2
-
-    determinant = m11 * m22 - m12 * m12
-    ddq1 = (m22 * rhs1 - m12 * rhs2) / determinant
-    ddq2 = (-m12 * rhs1 + m11 * rhs2) / determinant
-
-    return [dq1, dq2, ddq1, ddq2]
-
-
-def mass_matrix_terms(q2: float, params: ManipulatorParameters) -> tuple[float, float, float]:
-    cos_q2 = math.cos(q2)
-    m11 = (
-        params.link1_inertia
-        + params.link2_inertia
-        + params.link1_mass * params.link1_com**2
-        + params.link2_mass
-        * (params.link1_length**2 + params.link2_com**2 + 2.0 * params.link1_length * params.link2_com * cos_q2)
-    )
-    m12 = params.link2_inertia + params.link2_mass * (
-        params.link2_com**2 + params.link1_length * params.link2_com * cos_q2
-    )
-    m22 = params.link2_inertia + params.link2_mass * params.link2_com**2
-    return m11, m12, m22
-
-
-def coriolis_vector(q2: float, dq1: float, dq2: float, params: ManipulatorParameters) -> tuple[float, float]:
-    coupling = params.link2_mass * params.link1_length * params.link2_com * math.sin(q2)
-    c1 = -coupling * (2.0 * dq1 * dq2 + dq2 * dq2)
-    c2 = coupling * dq1 * dq1
-    return c1, c2
-
-
-def gravity_vector(q1: float, q2: float, params: ManipulatorParameters) -> tuple[float, float]:
-    g1 = (
-        (params.link1_mass * params.link1_com + params.link2_mass * params.link1_length)
-        * params.gravity
-        * math.cos(q1)
-        + params.link2_mass * params.link2_com * params.gravity * math.cos(q1 + q2)
-    )
-    g2 = params.link2_mass * params.link2_com * params.gravity * math.cos(q1 + q2)
-    return g1, g2
+    return dq + ddq

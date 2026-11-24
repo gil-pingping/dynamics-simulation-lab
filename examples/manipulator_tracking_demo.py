@@ -21,11 +21,10 @@ def main() -> None:
     write_dataclass_rows_csv(csv_path, samples)
 
     final = samples[-1]
-    print("Manipulator dynamics demo")
+    print("Manipulator dynamics demo (6-DOF)")
     print(f"- samples: {len(samples)}")
-    print(f"- final joint state: q1={final.q1:.3f} rad, q2={final.q2:.3f} rad")
-    print(f"- final reference: q1={final.ref_q1:.3f} rad, q2={final.ref_q2:.3f} rad")
-    print(f"- end effector: x={final.end_effector_x:.3f} m, y={final.end_effector_y:.3f} m")
+    print(f"- final joint state: q1={final.q1:.3f}, q2={final.q2:.3f}, q3={final.q3:.3f}, q4={final.q4:.3f}, q5={final.q5:.3f}, q6={final.q6:.3f} rad")
+    print(f"- end effector: x={final.ee_x:.3f} m, y={final.ee_y:.3f} m, z={final.ee_z:.3f} m")
     print(f"- saved CSV: {csv_path}")
 
     if save_plot(samples, png_path):
@@ -41,31 +40,29 @@ def save_plot(samples, path: Path) -> bool:
         return False
 
     times = [row.time for row in samples]
-    q1 = [row.q1 for row in samples]
-    q2 = [row.q2 for row in samples]
-    ref_q1 = [row.ref_q1 for row in samples]
-    ref_q2 = [row.ref_q2 for row in samples]
-    xs = [row.end_effector_x for row in samples]
-    ys = [row.end_effector_y for row in samples]
+    q = [[getattr(row, f"q{i}") for row in samples] for i in range(1, 7)]
+    xs = [row.ee_x for row in samples]
+    ys = [row.ee_y for row in samples]
+    zs = [row.ee_z for row in samples]
 
-    fig, axes = plt.subplots(1, 2, figsize=(12, 5))
-    axes[0].plot(times, q1, label="q1")
-    axes[0].plot(times, ref_q1, "--", label="ref q1")
-    axes[0].plot(times, q2, label="q2")
-    axes[0].plot(times, ref_q2, "--", label="ref q2")
-    axes[0].set_title("Joint tracking")
-    axes[0].set_xlabel("time (s)")
-    axes[0].set_ylabel("angle (rad)")
-    axes[0].grid(alpha=0.3)
-    axes[0].legend()
+    fig = plt.figure(figsize=(12, 5))
+    
+    ax1 = fig.add_subplot(121)
+    for i in range(6):
+        ax1.plot(times, q[i], label=f"q{i+1}")
+    ax1.set_title("Joint tracking (6-DOF)")
+    ax1.set_xlabel("time (s)")
+    ax1.set_ylabel("angle (rad)")
+    ax1.grid(alpha=0.3)
+    ax1.legend()
 
-    axes[1].plot(xs, ys, linewidth=2.0)
-    axes[1].scatter([xs[0], xs[-1]], [ys[0], ys[-1]], s=30)
-    axes[1].set_title("End effector path")
-    axes[1].set_xlabel("x (m)")
-    axes[1].set_ylabel("y (m)")
-    axes[1].grid(alpha=0.3)
-    axes[1].axis("equal")
+    ax2 = fig.add_subplot(122, projection='3d')
+    ax2.plot(xs, ys, zs, linewidth=2.0)
+    ax2.scatter([xs[0], xs[-1]], [ys[0], ys[-1]], [zs[0], zs[-1]], s=30, color='r')
+    ax2.set_title("End effector path (3D)")
+    ax2.set_xlabel("x (m)")
+    ax2.set_ylabel("y (m)")
+    ax2.set_zlabel("z (m)")
 
     fig.tight_layout()
     path.parent.mkdir(parents=True, exist_ok=True)

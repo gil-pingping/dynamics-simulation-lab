@@ -10,6 +10,7 @@ ROOT = Path(__file__).resolve().parents[1]
 def main() -> None:
     scripts = [
         ROOT / "examples" / "vehicle_lane_change_demo.py",
+        ROOT / "examples" / "vehicle_model_suite_demo.py",
         ROOT / "examples" / "manipulator_tracking_demo.py",
         ROOT / "examples" / "humanoid_walk_demo.py",
         ROOT / "examples" / "drone_mission_demo.py",

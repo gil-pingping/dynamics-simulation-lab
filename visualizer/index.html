@@ -1,0 +1,391 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dynamics Simulation Lab — 3D Visualizer</title>
+    <meta name="description" content="Interactive 3D visualization of vehicle, manipulator, humanoid, drone, and satellite dynamics simulations">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <style>
+        *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+        :root {
+            --bg-primary: #0a0e1a;
+            --bg-secondary: #111827;
+            --bg-tertiary: #1a2235;
+            --bg-glass: rgba(17, 24, 39, 0.75);
+            --border: rgba(99, 128, 255, 0.12);
+            --border-active: rgba(99, 128, 255, 0.35);
+            --text-primary: #e8ecf4;
+            --text-secondary: #8b95a8;
+            --text-muted: #5a6478;
+            --accent: #6380ff;
+            --accent-glow: rgba(99, 128, 255, 0.25);
+            --vehicle: #ff6b6b;
+            --manipulator: #ffa94d;
+            --humanoid: #69db7c;
+            --drone: #74c0fc;
+            --satellite: #da77f2;
+            --sidebar-width: 260px;
+            --controls-height: 64px;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            overflow: hidden;
+            height: 100vh;
+            width: 100vw;
+        }
+
+        /* ─── Sidebar ─── */
+        #sidebar {
+            position: fixed; left: 0; top: 0; bottom: 0;
+            width: var(--sidebar-width);
+            background: var(--bg-secondary);
+            border-right: 1px solid var(--border);
+            display: flex; flex-direction: column;
+            z-index: 100;
+            transition: transform 0.3s ease;
+        }
+
+        .sidebar-header {
+            padding: 20px 18px 16px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .sidebar-header h1 {
+            font-size: 14px; font-weight: 700;
+            letter-spacing: 0.05em; text-transform: uppercase;
+            background: linear-gradient(135deg, var(--accent), #a78bfa);
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+        }
+
+        .sidebar-header p {
+            font-size: 11px; color: var(--text-muted); margin-top: 4px;
+        }
+
+        .sim-group {
+            padding: 12px 14px 6px;
+        }
+
+        .sim-group-label {
+            font-size: 10px; font-weight: 600; text-transform: uppercase;
+            letter-spacing: 0.08em; color: var(--text-muted);
+            margin-bottom: 6px; padding-left: 4px;
+        }
+
+        .sim-btn {
+            display: flex; align-items: center; gap: 10px;
+            width: 100%; padding: 9px 12px;
+            background: transparent; border: 1px solid transparent;
+            border-radius: 8px; cursor: pointer;
+            color: var(--text-secondary); font-size: 13px;
+            font-family: inherit; text-align: left;
+            transition: all 0.2s ease;
+        }
+
+        .sim-btn:hover {
+            background: var(--bg-tertiary);
+            color: var(--text-primary);
+        }
+
+        .sim-btn.active {
+            background: var(--bg-tertiary);
+            border-color: var(--border-active);
+            color: var(--text-primary);
+        }
+
+        .sim-btn .icon {
+            font-size: 16px; width: 22px; text-align: center;
+            flex-shrink: 0;
+        }
+
+        .sim-btn .dot {
+            width: 6px; height: 6px; border-radius: 50%;
+            flex-shrink: 0;
+        }
+
+        .sim-btn[data-category="vehicle"] .dot { background: var(--vehicle); }
+        .sim-btn[data-category="manipulator"] .dot { background: var(--manipulator); }
+        .sim-btn[data-category="humanoid"] .dot { background: var(--humanoid); }
+        .sim-btn[data-category="drone"] .dot { background: var(--drone); }
+        .sim-btn[data-category="satellite"] .dot { background: var(--satellite); }
+
+        .sim-btn.active[data-category="vehicle"] { border-color: var(--vehicle); box-shadow: 0 0 12px rgba(255,107,107,0.1); }
+        .sim-btn.active[data-category="manipulator"] { border-color: var(--manipulator); box-shadow: 0 0 12px rgba(255,169,77,0.1); }
+        .sim-btn.active[data-category="humanoid"] { border-color: var(--humanoid); box-shadow: 0 0 12px rgba(105,219,124,0.1); }
+        .sim-btn.active[data-category="drone"] { border-color: var(--drone); box-shadow: 0 0 12px rgba(116,192,252,0.1); }
+        .sim-btn.active[data-category="satellite"] { border-color: var(--satellite); box-shadow: 0 0 12px rgba(218,119,242,0.1); }
+
+        .sub-items { padding-left: 28px; }
+        .sub-items .sim-btn { font-size: 12px; padding: 6px 10px; }
+
+        /* ─── Canvas ─── */
+        #canvas-container {
+            position: fixed;
+            left: var(--sidebar-width); top: 0;
+            right: 0; bottom: var(--controls-height);
+        }
+
+        #canvas-container canvas {
+            width: 100% !important; height: 100% !important;
+            display: block;
+        }
+
+        /* ─── Data Overlay ─── */
+        #data-overlay {
+            position: fixed;
+            top: 16px; right: 16px;
+            background: var(--bg-glass);
+            backdrop-filter: blur(16px);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 14px 18px;
+            min-width: 220px;
+            z-index: 90;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 12px;
+        }
+
+        #data-overlay .overlay-title {
+            font-family: 'Inter', sans-serif;
+            font-size: 11px; font-weight: 600;
+            text-transform: uppercase; letter-spacing: 0.08em;
+            color: var(--text-muted);
+            margin-bottom: 8px;
+        }
+
+        #data-overlay .data-row {
+            display: flex; justify-content: space-between;
+            padding: 2px 0;
+        }
+
+        #data-overlay .data-label { color: var(--text-secondary); }
+        #data-overlay .data-value { color: var(--text-primary); font-weight: 500; }
+
+        /* ─── Controls Bar ─── */
+        #controls-bar {
+            position: fixed;
+            left: var(--sidebar-width); right: 0; bottom: 0;
+            height: var(--controls-height);
+            background: var(--bg-secondary);
+            border-top: 1px solid var(--border);
+            display: flex; align-items: center;
+            padding: 0 24px; gap: 16px;
+            z-index: 100;
+        }
+
+        .ctrl-btn {
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            color: var(--text-primary);
+            width: 36px; height: 36px;
+            display: flex; align-items: center; justify-content: center;
+            cursor: pointer; font-size: 16px;
+            transition: all 0.2s ease;
+        }
+
+        .ctrl-btn:hover {
+            border-color: var(--border-active);
+            background: rgba(99, 128, 255, 0.08);
+        }
+
+        .ctrl-btn.active {
+            background: var(--accent);
+            border-color: var(--accent);
+        }
+
+        #timeline {
+            flex: 1; height: 4px;
+            -webkit-appearance: none; appearance: none;
+            background: var(--bg-tertiary);
+            border-radius: 2px; outline: none;
+            cursor: pointer;
+        }
+
+        #timeline::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 14px; height: 14px;
+            background: var(--accent);
+            border-radius: 50%;
+            cursor: pointer;
+            box-shadow: 0 0 8px var(--accent-glow);
+        }
+
+        #time-display {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 13px; color: var(--text-secondary);
+            min-width: 110px; text-align: center;
+        }
+
+        .speed-selector {
+            display: flex; gap: 4px;
+        }
+
+        .speed-btn {
+            background: transparent;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            color: var(--text-muted);
+            padding: 4px 8px; font-size: 11px;
+            font-family: 'JetBrains Mono', monospace;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .speed-btn:hover { color: var(--text-secondary); border-color: var(--border-active); }
+        .speed-btn.active { color: var(--accent); border-color: var(--accent); background: rgba(99,128,255,0.08); }
+
+        .camera-toggle {
+            display: flex; align-items: center; gap: 6px;
+            font-size: 11px; color: var(--text-muted);
+        }
+
+        .camera-toggle label { cursor: pointer; white-space: nowrap; }
+
+        /* ─── Loading ─── */
+        #loading-overlay {
+            position: fixed; inset: 0;
+            background: var(--bg-primary);
+            display: flex; flex-direction: column;
+            align-items: center; justify-content: center;
+            z-index: 999;
+            transition: opacity 0.4s ease;
+        }
+
+        #loading-overlay.hidden { opacity: 0; pointer-events: none; }
+
+        .loader-ring {
+            width: 40px; height: 40px;
+            border: 3px solid var(--bg-tertiary);
+            border-top-color: var(--accent);
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        .loader-text {
+            margin-top: 16px;
+            font-size: 13px; color: var(--text-secondary);
+        }
+
+        /* ─── Scrollbar ─── */
+        ::-webkit-scrollbar { width: 4px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+    </style>
+</head>
+<body>
+    <!-- Loading -->
+    <div id="loading-overlay">
+        <div class="loader-ring"></div>
+        <div class="loader-text">시뮬레이션 데이터 로딩 중...</div>
+    </div>
+
+    <!-- Sidebar -->
+    <nav id="sidebar">
+        <div class="sidebar-header">
+            <h1>Dynamics Lab</h1>
+            <p>3D Visualizer</p>
+        </div>
+
+        <div style="overflow-y: auto; flex: 1;">
+            <div class="sim-group">
+                <div class="sim-group-label">Vehicle</div>
+                <button class="sim-btn active" data-sim="vehicle_lane_change" data-category="vehicle">
+                    <span class="dot"></span>Lane Change
+                </button>
+                <button class="sim-btn" data-sim="vehicle_drift_transition" data-category="vehicle">
+                    <span class="dot"></span>Drift
+                </button>
+                <button class="sim-btn" data-sim="vehicle_kinematic_bicycle_parking" data-category="vehicle">
+                    <span class="dot"></span>Parking
+                </button>
+                <button class="sim-btn" data-sim="vehicle_ackermann_steering_course" data-category="vehicle">
+                    <span class="dot"></span>Ackermann
+                </button>
+                <button class="sim-btn" data-sim="vehicle_double_track_obstacle_avoidance" data-category="vehicle">
+                    <span class="dot"></span>Double Track
+                </button>
+                <button class="sim-btn" data-sim="vehicle_skid_steer_maneuver" data-category="vehicle">
+                    <span class="dot"></span>Skid Steer
+                </button>
+                <button class="sim-btn" data-sim="vehicle_articulated_s_curve" data-category="vehicle">
+                    <span class="dot"></span>Articulated
+                </button>
+                <button class="sim-btn" data-sim="vehicle_offroad_traverse" data-category="vehicle">
+                    <span class="dot"></span>Off-road
+                </button>
+                <button class="sim-btn" data-sim="vehicle_full_vehicle_handling" data-category="vehicle">
+                    <span class="dot"></span>Full Vehicle
+                </button>
+            </div>
+
+            <div class="sim-group">
+                <div class="sim-group-label">Robotics</div>
+                <button class="sim-btn" data-sim="manipulator_tracking" data-category="manipulator">
+                    <span class="dot"></span>Manipulator
+                </button>
+                <button class="sim-btn" data-sim="humanoid_walk" data-category="humanoid">
+                    <span class="dot"></span>Humanoid Walk
+                </button>
+            </div>
+
+            <div class="sim-group">
+                <div class="sim-group-label">Aerospace</div>
+                <button class="sim-btn" data-sim="drone_mission" data-category="drone">
+                    <span class="dot"></span>Drone Mission
+                </button>
+                <button class="sim-btn" data-sim="satellite_orbit_raise" data-category="satellite">
+                    <span class="dot"></span>Satellite Orbit
+                </button>
+            </div>
+        </div>
+    </nav>
+
+    <!-- 3D Canvas -->
+    <div id="canvas-container"></div>
+
+    <!-- Data Overlay -->
+    <div id="data-overlay">
+        <div class="overlay-title">Simulation Data</div>
+        <div id="data-content"></div>
+    </div>
+
+    <!-- Controls -->
+    <div id="controls-bar">
+        <button class="ctrl-btn" id="btn-reset" title="Reset">⏮</button>
+        <button class="ctrl-btn" id="btn-play" title="Play/Pause">▶</button>
+        <input type="range" id="timeline" min="0" max="1000" value="0" step="1">
+        <span id="time-display">0.00s / 0.00s</span>
+        <div class="speed-selector">
+            <button class="speed-btn" data-speed="0.25">0.25×</button>
+            <button class="speed-btn" data-speed="0.5">0.5×</button>
+            <button class="speed-btn active" data-speed="1">1×</button>
+            <button class="speed-btn" data-speed="2">2×</button>
+            <button class="speed-btn" data-speed="4">4×</button>
+        </div>
+        <div class="camera-toggle">
+            <label>
+                <input type="checkbox" id="camera-follow" checked>
+                Follow
+            </label>
+        </div>
+    </div>
+
+    <script type="importmap">
+    {
+        "imports": {
+            "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+            "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
+        }
+    }
+    </script>
+    <script type="module" src="app.js"></script>
+</body>
+</html>
